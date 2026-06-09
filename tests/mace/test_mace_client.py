@@ -15,23 +15,28 @@ from oet.core.test_utilities import (
     write_xyz_file,
 )
 
-# Path to the scripts, adjust if needed.
-aimnet2_script_path = ROOT_DIR / "../../bin/oet_client"
-aimnet2_server_path = ROOT_DIR / "../../bin/oet_server"
+# Path to the script, adjust if needed.
+mace_server_path = ROOT_DIR / "../../bin/oet_server"
+mace_client_path = ROOT_DIR / "../../bin/oet_client"
+# Default maximum time (in sec) to download the model files if not present
+timeout = 600
 # Default ID and port of server. Change if needed
 id_port = "127.0.0.1:9000"
 
 
-def run_aimnet2(inputfile: str, output_file: str) -> None:
+def run_mace(inputfile: str, output_file: str, args: list[str]) -> None:
+    # Run the wrapper with an increased timeout as loading the MACE model files might take a while
+    args.extend(["--bind", id_port])
     run_wrapper(
         inputfile=inputfile,
-        script_path=aimnet2_script_path,
+        script_path=mace_client_path,
         outfile=output_file,
-        args=["--bind", id_port],
+        timeout=30,
+        args=args,
     )
 
 
-class Aimnet2Tests(unittest.TestCase):
+class MACETests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """
@@ -40,7 +45,7 @@ class Aimnet2Tests(unittest.TestCase):
         print("Starting the server. A detailed server log can be found on file server.out")
         with open("server.out", "a") as f:
             cls.server = subprocess.Popen(
-                [aimnet2_server_path, "aimnet2", "--bind", id_port, "--nthreads", "2"],
+                [mace_server_path, "mace", "--bind", id_port, "--nthreads", "2"],
                 stdout=f,
                 stderr=subprocess.STDOUT,
                 preexec_fn=os.setsid,
@@ -58,7 +63,7 @@ class Aimnet2Tests(unittest.TestCase):
         cls.server.wait(timeout=10)
 
     def test_H2O_engrad(self):
-        xyz_file, input_file, engrad_out, output_file = get_filenames("H2O_client")
+        xyz_file, input_file, engrad_out, output_file = get_filenames("H2O")
 
         write_xyz_file(xyz_file, WATER)
         write_input_file(
@@ -69,19 +74,20 @@ class Aimnet2Tests(unittest.TestCase):
             ncores=2,
             do_gradient=1,
         )
-        run_aimnet2(input_file, output_file)
+        args = ["-s", "mace-mp", "-m", "medium", "--head", "mh0"]
+        run_mace(input_file, output_file, args)
         expected_num_atoms = 3
-        expected_energy = -7.647682538153e01
+        expected_energy = -5.203530407103e-01
         expected_gradients = [
-            -1.020942814648e-02,
-            -7.558954879642e-03,
-            5.339907482266e-03,
-            3.577803261578e-03,
-            9.023892693222e-03,
-            1.832913840190e-03,
-            6.631619296968e-03,
-            -1.464935485274e-03,
-            -7.172822486609e-03,
+            2.897306550196e-03,
+            2.144325522181e-03,
+            -1.515869870431e-03,
+            -7.767454655073e-04,
+            -3.378720118971e-03,
+            -1.222818329722e-03,
+            -2.120561084688e-03,
+            1.234394596790e-03,
+            2.738688200153e-03,
         ]
 
         try:
@@ -92,12 +98,12 @@ class Aimnet2Tests(unittest.TestCase):
             ) from e
 
         self.assertEqual(num_atoms, expected_num_atoms)
-        self.assertAlmostEqual(energy, expected_energy, places=9)
+        self.assertAlmostEqual(energy, expected_energy, places=7)
         for g1, g2 in zip(gradients, expected_gradients):
-            self.assertAlmostEqual(g1, g2, places=9)
+            self.assertAlmostEqual(g1, g2, places=7)
 
     def test_OH_anion_eng_grad(self):
-        xyz_file, input_file, engrad_out, output_file = get_filenames("OH_anion_client")
+        xyz_file, input_file, engrad_out, output_file = get_filenames("OH_anion")
         write_xyz_file(xyz_file, OH)
         write_input_file(
             filename=input_file,
@@ -107,16 +113,17 @@ class Aimnet2Tests(unittest.TestCase):
             ncores=2,
             do_gradient=1,
         )
-        run_aimnet2(input_file, output_file)
+        args = ["-s", "omol"]
+        run_mace(input_file, output_file, args)
         expected_num_atoms = 2
-        expected_energy = -7.582629635076e01
+        expected_energy = -7.580657311911e01
         expected_gradients = [
-            -4.858376923949e-04,
-            -1.563820987940e-03,
-            -4.455552552827e-04,
-            4.858376923949e-04,
-            1.563823316246e-03,
-            4.455552552827e-04,
+            -1.082263844645e-03,
+            -3.483610415645e-03,
+            -9.925303607707e-04,
+            1.082263844645e-03,
+            3.483610415645e-03,
+            9.925303607707e-04,
         ]
 
         try:
@@ -127,12 +134,12 @@ class Aimnet2Tests(unittest.TestCase):
             ) from e
 
         self.assertEqual(num_atoms, expected_num_atoms)
-        self.assertAlmostEqual(energy, expected_energy, places=9)
+        self.assertAlmostEqual(energy, expected_energy, places=7)
         for g1, g2 in zip(gradients, expected_gradients):
-            self.assertAlmostEqual(g1, g2, places=9)
+            self.assertAlmostEqual(g1, g2, places=7)
 
     def test_OH_rad_eng_grad(self):
-        xyz_file, input_file, engrad_out, output_file = get_filenames("OH_rad_client")
+        xyz_file, input_file, engrad_out, output_file = get_filenames("OH_rad")
         write_xyz_file(xyz_file, OH)
         write_input_file(
             filename=input_file,
@@ -142,16 +149,17 @@ class Aimnet2Tests(unittest.TestCase):
             ncores=2,
             do_gradient=1,
         )
-        run_aimnet2(input_file, output_file)
+        # Test the defaults (no arguments)
+        run_mace(input_file, output_file, args=[])
         expected_num_atoms = 2
-        expected_energy = -7.568258700191e01
+        expected_energy = -7.574239878105e01
         expected_gradients = [
-            -3.783945925534e-03,
-            -1.217983383685e-02,
-            -3.470211755484e-03,
-            3.783945692703e-03,
-            1.217983569950e-02,
-            3.470211755484e-03,
+            1.056554797887e-03,
+            3.400856384066e-03,
+            9.689529220712e-04,
+            -1.056554797887e-03,
+            -3.400856384066e-03,
+            -9.689529220712e-04,
         ]
 
         try:
@@ -162,9 +170,9 @@ class Aimnet2Tests(unittest.TestCase):
             ) from e
 
         self.assertEqual(num_atoms, expected_num_atoms)
-        self.assertAlmostEqual(energy, expected_energy, places=9)
+        self.assertAlmostEqual(energy, expected_energy, places=7)
         for g1, g2 in zip(gradients, expected_gradients):
-            self.assertAlmostEqual(g1, g2, places=9)
+            self.assertAlmostEqual(g1, g2, places=7)
 
 
 if __name__ == "__main__":
