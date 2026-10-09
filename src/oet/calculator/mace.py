@@ -5,8 +5,7 @@ MACE wrapper for ORCA's ExtTool interface.
 
 import sys
 import warnings
-from argparse import ArgumentParser
-from typing import Any
+from argparse import ArgumentParser, Namespace
 
 from oet.core.base_calc import BaseCalc, CalculationData
 from oet.core.misc import ENERGY_CONVERSION, LENGTH_CONVERSION, xyzfile_to_at_coord
@@ -18,6 +17,7 @@ try:
             "ignore",
             message="Environment variable TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD detected",
         )
+        from ase.calculators.calculator import PropertyNotImplementedError
         from mace.calculators.foundations_models import mace_mp, mace_omol
         from mace.calculators.mace import MACECalculator
 except ImportError as e:
@@ -89,15 +89,15 @@ class MaceCalc(BaseCalc):
             return
         match suite:
             case "mp":
-                kwargs = dict(
-                    model=model,
-                    device=device,
-                    default_dtype=default_dtype or "float32",
-                    dispersion=dispersion,
-                    damping=damping,
-                    dispersion_xc=dispersion_xc,
-                    dispersion_cutoff=(dispersion_cutoff * LENGTH_CONVERSION["Ang"]),
-                )
+                kwargs: dict[str, object] = {
+                    "model": model,
+                    "device": device,
+                    "default_dtype": default_dtype or "float32",
+                    "dispersion": dispersion,
+                    "damping": damping,
+                    "dispersion_xc": dispersion_xc,
+                    "dispersion_cutoff": (dispersion_cutoff * LENGTH_CONVERSION["Ang"]),
+                }
                 if head:
                     kwargs["head"] = head
                 calc = mace_mp(**kwargs)
@@ -131,6 +131,7 @@ class MaceCalc(BaseCalc):
         parser.add_argument(
             "-s",
             "--suite",
+            dest="suite",
             choices=["mp", "omol", "mace-mp", "mace-omol"],
             default="omol",
             help="Select MACE suite: mp/mace-mp or omol/mace-omol. Default: omol",
@@ -170,8 +171,8 @@ class MaceCalc(BaseCalc):
                 "This requires the installation of torch_dftd to the virtual "
                 "environment and that liblzma was installed when setting up "
                 "the environment."
-            )
-            )
+            ),
+        )
         parser.add_argument(
             "--damping",
             type=str,
@@ -244,7 +245,7 @@ class MaceCalc(BaseCalc):
             # Convert forces to gradient (-1) and unit conversion
             fac = -LENGTH_CONVERSION["Ang"] / ENERGY_CONVERSION["eV"]
             gradient = (fac * forces).flatten().tolist()
-        except Exception:
+        except PropertyNotImplementedError:
             # forces may not be available
             pass
 
@@ -253,7 +254,7 @@ class MaceCalc(BaseCalc):
     def calc(
         self,
         calc_data: CalculationData,
-        args_parsed: dict[str, Any],
+        args_parsed: Namespace,
         args_not_parsed: list[str],
     ) -> tuple[float, list[float]]:
         """
@@ -263,7 +264,7 @@ class MaceCalc(BaseCalc):
         ----------
         calc_data: CalculationData
             Object with calculation data for the run
-        args_parsed: dict[str, Any]
+        args_parsed: Namespace
             Arguments parsed as defined in extend_parser
         args_not_parsed: list[str]
             Arguments not parsed so far
@@ -276,12 +277,12 @@ class MaceCalc(BaseCalc):
             Flattened gradient vector (Eh/Bohr), if computed, otherwise empty
         """
 
-        suite = args_parsed["suite"]
+        suite = args_parsed.suite
         if suite.startswith("mace"):
             suite = suite.split("-", 1)[1]
-        dispersion = bool(args_parsed["dispersion"])
-        dispersion_xc = args_parsed["dispersion_xc"]
-        dispersion_cutoff = args_parsed["dispersion_cutoff"]
+        dispersion = args_parsed.dispersion
+        dispersion_xc = args_parsed.dispersion_xc
+        dispersion_cutoff = args_parsed.dispersion_cutoff
         if dispersion and suite != "mp":
             print(
                 "WARNING: Dispersion flag recognized, but MP suite not used. Ignoring all options related to dispersion."
@@ -297,14 +298,14 @@ class MaceCalc(BaseCalc):
             )
             self.set_calculator(
                 suite=suite,
-                model=args_parsed["model"],
+                model=args_parsed.model,
                 dispersion=dispersion,
-                damping=args_parsed["damping"],
+                damping=args_parsed.damping,
                 dispersion_xc=dispersion_xc,
                 dispersion_cutoff=dispersion_cutoff,
-                device=args_parsed["device"],
-                default_dtype=args_parsed["default_dtype"],
-                head=args_parsed["head"],
+                device=args_parsed.device,
+                default_dtype=args_parsed.default_dtype,
+                head=args_parsed.head,
             )
 
         # process the XYZ file

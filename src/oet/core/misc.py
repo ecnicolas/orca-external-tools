@@ -120,7 +120,7 @@ def check_multi_progs(keys: Sequence[str]) -> Path | None:
     for key in keys:
         try:
             return check_prog(key)
-        except Exception:
+        except (FileNotFoundError, PermissionError):
             continue
     return None
 
@@ -277,12 +277,12 @@ def read_input(
     # Get every first entry of each line of input file
     try:
         with open(inputfile, "r") as f:
-            lines = [line.split(" ")[0].strip() for line in f.readlines() if line.strip()]
+            lines = [line.split(" ")[0].strip() for line in f if line.strip()]
     except FileNotFoundError:
         raise FileNotFoundError(f"Input file not found: {inputfile}")
     # Save information
     try:
-        xyz_filename = lines[0]
+        xyz_filename = Path(lines[0]).name
         charge = int(lines[1])
         multiplicity = int(lines[2])
         ncores = int(lines[3])
@@ -332,21 +332,7 @@ def get_ncores_from_input(
     FileNotFoundError: Input file not found
     ValueError: If input contained values in wrong format
     """
-    # Get every first entry of each line of input file
-    try:
-        with open(inputfile, "r") as f:
-            lines = [line.split(" ")[0].strip() for line in f.readlines() if line.strip()]
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Input file not found: {inputfile}")
-    # Save information
-    try:
-        ncores = int(lines[3])
-    except ValueError as e:
-        raise ValueError(f"Error reading ORCA input file: {e}")
-    # Some sanity check
-    if ncores < 1:
-        raise ValueError("NCores must be a positive integer.")
-    return ncores
+    return read_input(inputfile=inputfile)[3]
 
 
 def check_file(file_path: Path | str) -> bool:
@@ -456,10 +442,9 @@ def remove_file(fname: str | Path) -> None:
         fname = Path(fname)
     if fname.is_file():
         fname.unlink()
-    return
 
 
-def write_to_file(content: str | int | float, file: str) -> None:
+def write_to_file(content: str | float, file: str) -> None:
     """
     Writes any str/int/float to file
 

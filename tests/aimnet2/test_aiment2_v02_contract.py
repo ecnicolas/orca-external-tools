@@ -155,7 +155,7 @@ class TestSetupSignature:
         monkeypatch.setattr("torch.cuda.is_available", lambda: False)
         calc = Aimnet2Calc()
         with pytest.raises(RuntimeError, match="CUDA requested but not available"):
-            calc.setup(model="aimnet2", model_dir="/tmp", device="cuda", ncores=1)
+            calc.setup(model="aimnet2", model_dir="/tmp", device="cuda")
 
     def test_args_match_short_circuit(self):
         """Second setup() call with same args is a no-op."""
@@ -169,7 +169,6 @@ class TestSetupSignature:
                 "model": "aimnet2",
                 "model_dir": "/tmp",
                 "device": "cpu",
-                "ncores": 1,
                 "compile_model": False,
                 "nb_threshold": 120,
                 "ensemble_member": 0,
@@ -186,7 +185,6 @@ class TestSetupSignature:
             model="aimnet2",
             model_dir="/tmp",
             device="cpu",
-            ncores=1,
         )
         assert calc._calc is not None  # still the original mock
 
@@ -201,7 +199,6 @@ class TestSetupSignature:
                 "model": "aimnet2",
                 "model_dir": "/tmp",
                 "device": "cpu",
-                "ncores": 1,
                 "compile_model": False,
                 "nb_threshold": 120,
                 "ensemble_member": 0,
@@ -218,7 +215,6 @@ class TestSetupSignature:
                 model="aimnet2-2025",
                 model_dir="/tmp",
                 device="cpu",
-                ncores=1,
             )
 
     def test_auto_and_none_device_compare_equal(self):
@@ -233,7 +229,6 @@ class TestSetupSignature:
                 "model": "aimnet2",
                 "model_dir": "/tmp",
                 "device": None,
-                "ncores": 1,
                 "compile_model": False,
                 "nb_threshold": 120,
                 "ensemble_member": 0,
@@ -250,7 +245,6 @@ class TestSetupSignature:
             model="aimnet2",
             model_dir="/tmp",
             device=None,
-            ncores=1,
         )
         assert calc._calc is not None
 
@@ -262,7 +256,6 @@ class TestSetupSignature:
                 model="aimnet2",
                 model_dir="/tmp",
                 device="cpu",
-                ncores=1,
                 coulomb="yes",
             )
 
@@ -274,7 +267,6 @@ class TestSetupSignature:
                 model="aimnet2",
                 model_dir="/tmp",
                 device="cpu",
-                ncores=1,
                 coulomb_method="wolf",
             )
 
@@ -287,18 +279,19 @@ class TestSetupSignature:
         rxn_path = tmp_path / "aimnet2-rxn_0.pt"
         rxn_path.write_bytes(b"")
         calc = Aimnet2Calc()
-        with patch.object(Aimnet2Calc, "get_model_file", return_value=rxn_path):
-            with patch("oet.calculator.aimnet2.AIMNet2Calculator") as MockCalc:
-                MockCalc.return_value = MagicMock()
-                with pytest.warns(UserWarning, match="aimnet2-rxn training cutoff"):
-                    calc.setup(
-                        model="aimnet2-rxn",
-                        model_dir=str(tmp_path),
-                        device="cpu",
-                        ncores=1,
-                        coulomb_method="dsf",
-                        coulomb_cutoff=12.0,
-                    )
+        with (
+            patch.object(Aimnet2Calc, "get_model_file", return_value=rxn_path),
+            patch("oet.calculator.aimnet2.AIMNet2Calculator") as MockCalc,
+        ):
+            MockCalc.return_value = MagicMock()
+            with pytest.warns(UserWarning, match="aimnet2-rxn training cutoff"):
+                calc.setup(
+                    model="aimnet2-rxn",
+                    model_dir=str(tmp_path),
+                    device="cpu",
+                    coulomb_method="dsf",
+                    coulomb_cutoff=12.0,
+                )
 
     def test_rxn_with_trained_cutoff_no_warn(self, monkeypatch, tmp_path):
         """aimnet2-rxn + cutoff = 4.6 must NOT emit the rxn-cutoff warning."""
@@ -306,23 +299,22 @@ class TestSetupSignature:
         rxn_path = tmp_path / "aimnet2-rxn_0.pt"
         rxn_path.write_bytes(b"")
         calc = Aimnet2Calc()
-        with patch.object(Aimnet2Calc, "get_model_file", return_value=rxn_path):
-            with patch("oet.calculator.aimnet2.AIMNet2Calculator") as MockCalc:
-                MockCalc.return_value = MagicMock()
-                with warnings.catch_warnings(record=True) as caught:
-                    warnings.simplefilter("always")
-                    calc.setup(
-                        model="aimnet2-rxn",
-                        model_dir=str(tmp_path),
-                        device="cpu",
-                        ncores=1,
-                        coulomb_method="dsf",
-                        coulomb_cutoff=4.6,
-                    )
-                rxn_warnings = [
-                    w for w in caught if "aimnet2-rxn training cutoff" in str(w.message)
-                ]
-                assert rxn_warnings == []
+        with (
+            patch.object(Aimnet2Calc, "get_model_file", return_value=rxn_path),
+            patch("oet.calculator.aimnet2.AIMNet2Calculator") as MockCalc,
+        ):
+            MockCalc.return_value = MagicMock()
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                calc.setup(
+                    model="aimnet2-rxn",
+                    model_dir=str(tmp_path),
+                    device="cpu",
+                    coulomb_method="dsf",
+                    coulomb_cutoff=4.6,
+                )
+            rxn_warnings = [w for w in caught if "aimnet2-rxn training cutoff" in str(w.message)]
+            assert rxn_warnings == []
 
     def test_rxn_without_coulomb_method_no_warn(self, monkeypatch, tmp_path):
         """aimnet2-rxn without --coulomb-method ignores --coulomb-cutoff
@@ -331,21 +323,20 @@ class TestSetupSignature:
         rxn_path = tmp_path / "aimnet2-rxn_0.pt"
         rxn_path.write_bytes(b"")
         calc = Aimnet2Calc()
-        with patch.object(Aimnet2Calc, "get_model_file", return_value=rxn_path):
-            with patch("oet.calculator.aimnet2.AIMNet2Calculator") as MockCalc:
-                MockCalc.return_value = MagicMock()
-                with warnings.catch_warnings(record=True) as caught:
-                    warnings.simplefilter("always")
-                    calc.setup(
-                        model="aimnet2-rxn",
-                        model_dir=str(tmp_path),
-                        device="cpu",
-                        ncores=1,
-                    )
-                rxn_warnings = [
-                    w for w in caught if "aimnet2-rxn training cutoff" in str(w.message)
-                ]
-                assert rxn_warnings == []
+        with (
+            patch.object(Aimnet2Calc, "get_model_file", return_value=rxn_path),
+            patch("oet.calculator.aimnet2.AIMNet2Calculator") as MockCalc,
+        ):
+            MockCalc.return_value = MagicMock()
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                calc.setup(
+                    model="aimnet2-rxn",
+                    model_dir=str(tmp_path),
+                    device="cpu",
+                )
+            rxn_warnings = [w for w in caught if "aimnet2-rxn training cutoff" in str(w.message)]
+            assert rxn_warnings == []
 
 
 class TestReleaseHook:
@@ -390,7 +381,6 @@ class TestReleaseHook:
                 model="aimnet2-2025",
                 model_dir="/tmp",
                 device="cpu",
-                ncores=2,
             )
         assert calc._calc is not None
         assert calc._setup_args is not None
@@ -409,16 +399,17 @@ class TestReleaseHook:
         bad_calc.external_coulomb = MagicMock()
         bad_calc.external_dftd3 = None
 
-        with patch("oet.calculator.aimnet2.AIMNet2Calculator", return_value=bad_calc):
-            with pytest.raises(RuntimeError, match="bad config"):
-                calc.setup(
-                    model="aimnet2",
-                    model_dir="/tmp",
-                    device="cpu",
-                    ncores=2,
-                    coulomb_method="dsf",
-                    coulomb_cutoff=12.0,
-                )
+        with (
+            patch("oet.calculator.aimnet2.AIMNet2Calculator", return_value=bad_calc),
+            pytest.raises(RuntimeError, match="bad config"),
+        ):
+            calc.setup(
+                model="aimnet2",
+                model_dir="/tmp",
+                device="cpu",
+                coulomb_method="dsf",
+                coulomb_cutoff=12.0,
+            )
 
         # Rollback contract: components walked back to cpu BEFORE _calc dropped.
         bad_calc.model.to.assert_called_with("cpu")
@@ -435,7 +426,6 @@ class TestBaseCalcReleaseDefault:
     """
 
     def test_release_default_is_callable_and_no_op(self):
-
         from oet.core.base_calc import BaseCalc
 
         class _StubCalc(BaseCalc):
